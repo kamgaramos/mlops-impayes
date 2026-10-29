@@ -3,12 +3,16 @@ from pathlib import Path
 
 import pandas as pd
 from scipy import sparse
+from sklearn.compose import ColumnTransformer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score, roc_auc_score
 from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder
 
 from src.config import load_params
 from src.data import load_data
+
 
 def _coerce_target(series: pd.Series) -> pd.Series:
     if pd.api.types.is_numeric_dtype(series):
@@ -31,10 +35,31 @@ def _coerce_target(series: pd.Series) -> pd.Series:
         raise ValueError(f"Cible invalide: {unknown}")
     return normalized.map(mapping).astype(int)
 
+
 def ensure_dense(X):
     if sparse.issparse(X):
         return X.toarray()
     return X
+
+
+def _build_pipeline(X: pd.DataFrame, max_iter: int) -> Pipeline:
+    numeric_cols = list(X.select_dtypes(include=["number"]).columns)
+    categorical_cols = [c for c in X.columns if c not in numeric_cols]
+
+    transformers = []
+    if numeric_cols:
+        transformers.append(("num", "passthrough", numeric_cols))
+    if categorical_cols:
+        transformers.append(("cat", OneHotEncoder(handle_unknown="ignore"), categorical_cols))
+
+    preprocessor = ColumnTransformer(transformers=transformers, remainder="drop") if transformers else "passthrough"
+    return Pipeline(
+        steps=[
+            ("preprocessor", preprocessor),
+            ("model", LogisticRegression(max_iter=max_iter)),
+        ]
+    )
+
 
 def train(df: pd.DataFrame, params: dict, track: bool = True, out_dir: str = "models"):
     target = params["data"]["target"]
@@ -52,10 +77,7 @@ def train(df: pd.DataFrame, params: dict, track: bool = True, out_dir: str = "mo
         stratify=y,
     )
 
-    X_train = ensure_dense(X_train)
-    X_test = ensure_dense(X_test)
-
-    model = LogisticRegression(max_iter=params["train"].get("max_iter", 200))
+    model = _build_pipeline(X_train, params["train"].get("max_iter", 200))
     model.fit(X_train, y_train)
 
     proba = model.predict_proba(X_test)[:, 1]
@@ -75,6 +97,7 @@ def train(df: pd.DataFrame, params: dict, track: bool = True, out_dir: str = "mo
         out_path.mkdir(parents=True, exist_ok=True)
 
         import joblib
+
         joblib.dump(model, out_path / "model.joblib")
 
         with open(out_path / "metrics.json", "w") as f:
@@ -92,6 +115,7 @@ def train(df: pd.DataFrame, params: dict, track: bool = True, out_dir: str = "mo
         "metrics": metrics,
         "model": model,
     }
+
 
 if __name__ == "__main__":
     params = load_params()
