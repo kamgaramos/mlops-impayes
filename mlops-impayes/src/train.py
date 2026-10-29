@@ -13,3 +13,9 @@ def _coerce_target(series: pd.Series) -> pd.Series:
     if unknown:
         raise ValueError(f"Cible invalide: {unknown}")
     return normalized.map(mapping).astype(int)
+from scipy import sparse
+
+def ensure_dense(X):
+    if sparse.issparse(X):
+        return X.toarray()
+    return X
