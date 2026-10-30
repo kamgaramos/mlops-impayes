@@ -97,8 +97,10 @@ def train(df: pd.DataFrame, params: dict, track: bool = True, out_dir: str = "mo
         and metrics["auc"] >= gate.get("min_auc", 0.0)
     )
 
-    if track:
-        out_path = Path(out_dir)
+    # Keep model artifacts on disk whenever an output directory is provided.
+    # `track` is only for optional external logging and must not suppress artifact generation.
+    if out_dir is not None or track:
+        out_path = Path(out_dir) if out_dir is not None else Path("models")
         out_path.mkdir(parents=True, exist_ok=True)
 
         import joblib
