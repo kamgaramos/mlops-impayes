@@ -92,7 +92,7 @@ def train(df: pd.DataFrame, params: dict, track: bool = True, out_dir: str = "mo
         and metrics["auc"] >= gate.get("min_auc", 0.0)
     )
 
-    if track:
+    if out_dir is not None:
         out_path = Path(out_dir)
         out_path.mkdir(parents=True, exist_ok=True)
 
@@ -109,6 +109,12 @@ def train(df: pd.DataFrame, params: dict, track: bool = True, out_dir: str = "mo
         ref = X_train.copy()
         ref["target"] = y_train
         ref.to_csv(out_path / "reference.csv", index=False)
+
+    # Keep the original flag for caller intent without preventing artifact generation.
+    if track:
+        # This branch intentionally remains empty: tracking is optional in this repo,
+        # and model artifacts must still be written when out_dir is provided.
+        pass
 
     return {
         "passed": passed,
